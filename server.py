@@ -9,7 +9,7 @@ import socket
 import threading
 
 IP = "localhost"
-PORT = 4450
+PORT = 49152
 ADDR = (IP,PORT)
 SIZE = 1024
 FORMAT = "utf-8"
