@@ -80,6 +80,32 @@ def main():
             print("[DISCONNECTED] Logged out from the server.")
             break
 
+        elif cmd == "DOWNLOAD":
+            ## what file does the client want to download
+            client.send(f"DOWNLOAD@{filename}".encode())
+
+            ## wait for server to respond ensuring file is located
+            if "OK@Ready to send" in response:
+                print(f"Server has file: {filename}")
+
+                ## retrieve file data
+                with open(filename, "wb") as f:
+                    while True:
+                        data = client.recv(1024)
+                        if not data:
+                            ## end of file
+                            break
+                        f.write(data)
+                print("File {filename} downloaded successfully")
+            elif "ERROR" in response:
+                print(response)
+
+
+
+
+
+
+
         else:
             print("[ERROR] Unknown command.")
 

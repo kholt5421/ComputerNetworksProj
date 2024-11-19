@@ -69,6 +69,21 @@ def handle_client (conn,addr):
                 files = os.listdir(SERVER_PATH)
                 file_list = "\n".join(files)
                 conn.send(f"OK@{file_list}".encode(FORMAT))
+
+            elif cmd == "DOWNLOAD":
+                filename = data[1]
+                filepath = os.path.join(SERVER_PATH, filename)
+                ## if file is not found
+                if not os.path.isfile(filepath):
+                    conn.send("[ERROR] File not found".encode(FORMAT))
+                else:
+                    with open(filename, "rb") as f:
+                        ## read the file in chunks and send
+                        while(chunk:= f.read(SIZE)):
+                            conn.send(chunk)
+                    conn.send(f"OK@Ready to send {filename}".encode(FORMAT))
+
+
             else:
                 conn.send("ERROR@Invalid command.".encode(FORMAT))
                 
