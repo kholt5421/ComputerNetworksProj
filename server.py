@@ -1,6 +1,7 @@
 import os
 import socket
 import threading
+import hashlib
 
 IP = "0.0.0.0" # Change to server IPv4
 PORT = 49152
