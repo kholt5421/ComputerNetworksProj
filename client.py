@@ -3,44 +3,31 @@ import socket
 
 
 # Server connection details
-IP = "0.0.0.0"  # Change to server IPv4
-PORT = 49152
+IP = "192.168.4.146"  # Change to server IPv4
+PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
 FORMAT = "utf-8"
-CLIENT_STORAGE = "client_storage"  # Local directory for client files
-
-# Ensure the client storage directory exists
-if not os.path.exists(CLIENT_STORAGE):
-    os.makedirs(CLIENT_STORAGE)
 
 def main():
-    
-    client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
     print("[CONNECTED] Connected to the server.")
+    response = client.recv(SIZE).decode(FORMAT)
+    print(response)
 
-    # Authenticate with the server
-    while True:  
-        response = client.recv(SIZE).decode(FORMAT)
-        cmd, msg = response.split("@", 1)
-        print(msg)
-        if cmd == "OK":
-            if "authenticate" in msg.lower():
-                username = input("Username: ")
-                password = input("Password: ")
-                client.send(f"{username}@{password}".encode(FORMAT))
-            else:
-                break
-        elif cmd == "ERROR":
-            print("[ERROR] Authentication failed. Try again.")
-        
-        data = input("> ").strip() 
+    while True:        
+
+        # Input command from the client
+        data = input("> ").strip()
         command = data.split(" ")
-        
         cmd = command[0].upper()
 
-        if cmd == "UPLOAD":
+        if cmd == "LOGOUT":
+            client.send(cmd.encode(FORMAT))
+            print("[DISCONNECTED] Logged out from the server.")
+            break
+        elif cmd == "UPLOAD":
             if len(command) < 2:
                 print("[ERROR] Specify the file path to upload.")
                 continue
@@ -52,21 +39,42 @@ def main():
 
             filename = os.path.basename(filepath)
             filesize = os.path.getsize(filepath)
+
+            print(f"Uploading file: {filename}, Size: {filesize} bytes")
+
+            # Send the command to the server with file details
             client.send(f"{cmd}@{filename}@{filesize}".encode(FORMAT))
 
+            # Wait for server response
+            response = client.recv(SIZE).decode(FORMAT)
+            if response.startswith("ERROR@File already exists"):
+                print(response.split("@", 1)[1])
+                overwrite = input("Overwrite the file? (yes/no): ").strip().lower()
+                client.send(overwrite.encode(FORMAT))
+                if overwrite != "yes":
+                    print("[UPLOAD CANCELLED] The file was not uploaded.")
+                    continue
+
+            # Send the file content in chunks
             with open(filepath, "rb") as f:
                 chunk = f.read(SIZE)
                 while chunk:
                     client.send(chunk)
                     chunk = f.read(SIZE)
 
+            # Send a special message to indicate the end of file transfer
+            client.send(b'END_FILE')
 
+            # Wait for server confirmation
             response = client.recv(SIZE).decode(FORMAT)
             cmd, msg = response.split("@", 1)
             print(msg)
 
         elif cmd == "DIR":
+            # Send the command to the server
             client.send(cmd.encode(FORMAT))
+
+            # Receive and process the server's response
             response = client.recv(SIZE).decode(FORMAT)
             cmd, msg = response.split("@", 1)
             if cmd == "OK":
@@ -75,43 +83,10 @@ def main():
             else:
                 print(f"[ERROR] {msg}")
 
-        elif cmd == "LOGOUT":
-            client.send(cmd.encode(FORMAT))
-            print("[DISCONNECTED] Logged out from the server.")
-            break
-
-        elif cmd == "DOWNLOAD":
-            ## what file does the client want to download
-            client.send(f"DOWNLOAD@{filename}".encode())
-
-            ## wait for server to respond ensuring file is located
-            if "OK@Ready to send" in response:
-                print(f"Server has file: {filename}")
-
-                ## retrieve file data
-                with open(filename, "wb") as f:
-                    while True:
-                        data = client.recv(1024)
-                        if not data:
-                            ## end of file
-                            break
-                        f.write(data)
-                print("File {filename} downloaded successfully")
-            elif "ERROR" in response:
-                print(response)
+    client.close()  # Close the connection
 
 
-
-
-
-
-
-        else:
-            print("[ERROR] Unknown command.")
-
-
-    
-    client.close() ## close the connection
 
 if __name__ == "__main__":
     main()
+

@@ -2,113 +2,111 @@ import os
 import socket
 import threading
 import hashlib
+import time  # To measure response time
 
-IP = "0.0.0.0" # Change to server IPv4
-PORT = 49152
+IP = "192.168.4.146" # Change to server IPv4
+PORT = 49157
 ADDR = (IP,PORT)
 SIZE = 1024
 FORMAT = "utf-8"
 SERVER_PATH = "server_storage"  # Directory to store files
 
-# Simulated user database with hashed passwords
-USERS = {
-    "user1": hashlib.sha256("password1".encode(FORMAT)).hexdigest(),
-    "user2": hashlib.sha256("password2".encode(FORMAT)).hexdigest()
-}
-
-def authenticate(username, password):
-    # Authenticate user using hashed passwords
-    hashed_input = hashlib.sha256(password.encode(FORMAT)).hexdigest()
-    return USERS.get(username) == hashed_input
-
 # Ensure the server storage directory exists
 if not os.path.exists(SERVER_PATH):
     os.makedirs(SERVER_PATH)
-
-def handle_client (conn,addr):
-
-
-    print(f"[NEW CONNECTION] {addr} connected.")
-    conn.send("OK@Welcome to the server. Please authenticate.".encode(FORMAT))
-
-    authenticated = False
-    while not authenticated:
-        credentials = conn.recv(SIZE).decode(FORMAT).split("@")
-        if len(credentials) < 2:
-            conn.send("ERROR@Invalid credentials format.".encode(FORMAT))
-            continue
-        username, password = credentials
-        if authenticate(username, password):
-            authenticated = True
-            conn.send("OK@Authentication successful.".encode(FORMAT))
-        else:
-            conn.send("ERROR@Invalid username or password.".encode(FORMAT))
     
+def handle_client(conn, addr):
+   
+    print(f"[NEW CONNECTION] {addr} connected.")
+    conn.send("Welcome to the server".encode(FORMAT))
+
     while True:
         try:
-            data =  conn.recv(SIZE).decode(FORMAT)
-            data = data.split("@")
-            cmd = data[0]
-           
-            send_data = "OK@"
+            # Receive a command from the client
+            data = conn.recv(SIZE).decode(FORMAT)
+            if not data:
+                print(f"[DISCONNECTED] {addr} disconnected.")
+                break
+
+            print(f"[RECEIVED DATA] {data} from {addr}")
+            command = data.split("@")
+            cmd = command[0]
 
             if cmd == "LOGOUT":
+                # Log the user out
+                conn.send("OK@Logged out".encode(FORMAT))
+                print(f"[DISCONNECTED] {addr} logged out.")
                 break
 
             elif cmd == "UPLOAD":
-                filename = data[1]
-                filesize = int(data[2])
+                # Handle file upload
+                filename = command[1]
+                filesize = int(command[2])
                 filepath = os.path.join(SERVER_PATH, filename)
+
+                # Check for existing file
+                if os.path.exists(filepath):
+                    conn.send(f"ERROR@File {filename} already exists.".encode(FORMAT))
+                    overwrite = conn.recv(SIZE).decode(FORMAT).strip().lower()
+                    if overwrite != "yes":
+                        conn.send("ERROR@Upload cancelled.".encode(FORMAT))
+                        continue
+
+                conn.send("OK@Ready to receive file".encode(FORMAT))
+
+                # Receive the file data in chunks
                 with open(filepath, "wb") as f:
-                    remaining = filesize
-                    while remaining > 0:
-                        chunk = conn.recv(min(SIZE, remaining))
+                    bytes_received = 0
+                    while bytes_received < filesize:
+                        chunk = conn.recv(SIZE)
+                        if chunk == b"END_FILE":
+                            break
                         f.write(chunk)
-                        remaining -= len(chunk)
-                conn.send("OK@File uploaded successfully.".encode(FORMAT))
+                        bytes_received += len(chunk)
+
+                print(f"[UPLOAD COMPLETE] File {filename} uploaded by {addr}.")
+                conn.send(f"OK@File {filename} uploaded successfully.".encode(FORMAT))
+
             elif cmd == "DIR":
-                files = os.listdir(SERVER_PATH)
-                file_list = "\n".join(files)
-                conn.send(f"OK@{file_list}".encode(FORMAT))
-
-            elif cmd == "DOWNLOAD":
-                filename = data[1]
-                filepath = os.path.join(SERVER_PATH, filename)
-                ## if file is not found
-                if not os.path.isfile(filepath):
-                    conn.send("[ERROR] File not found".encode(FORMAT))
-                else:
-                    with open(filename, "rb") as f:
-                        ## read the file in chunks and send
-                        while(chunk:= f.read(SIZE)):
-                            conn.send(chunk)
-                    conn.send(f"OK@Ready to send {filename}".encode(FORMAT))
-
+                # Handle directory listing
+                try:
+                    files = os.listdir(SERVER_PATH)
+                    if files:
+                        file_list = "\n".join(files)
+                    else:
+                        file_list = "No files in the server directory."
+                    conn.send(f"OK@{file_list}".encode(FORMAT))
+                except Exception as e:
+                    print(f"[ERROR] Failed to list directory contents: {e}")
+                    conn.send(f"ERROR@Failed to list directory contents.".encode(FORMAT))
+            
 
             else:
+                # Unknown command
                 conn.send("ERROR@Invalid command.".encode(FORMAT))
-                
+                print(f"[ERROR] Unknown command received: {cmd}")
+
         except Exception as e:
-            print(f"[ERROR] {e}")
-            conn.send("ERROR@An error occurred.".encode(FORMAT))
+            print(f"[ERROR] Exception with client {addr}: {e}")
             break
 
-
-    print(f"[DISCONNECTED] {addr} disconnected")
     conn.close()
+    print(f"[CONNECTION CLOSED] {addr}")
 
 
 def main():
-    print("Starting the server")
-    server = socket.socket(socket.AF_INET,socket.SOCK_STREAM) ## used IPV4 and TCP connection
-    server.bind(ADDR) # bind the address
-    server.listen() ## start listening
-    print(f"server is listening on {IP}: {PORT}")
+    # Main server function to accept and manage connections.
+    print("[STARTING] Server is starting...")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(ADDR)
+    server.listen()
+    print(f"[LISTENING] Server is listening on {IP}:{PORT}")
+
     while True:
-        conn, addr = server.accept() ### accept a connection from a client
-        thread = threading.Thread(target = handle_client, args = (conn, addr)) ## assigning a thread for each client
+        conn, addr = server.accept()
+        thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
-        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
 if __name__ == "__main__":
