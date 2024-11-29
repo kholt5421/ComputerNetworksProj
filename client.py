@@ -8,6 +8,11 @@ PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
 FORMAT = "utf-8"
+CLIENT_STORAGE = "client_storage"  # Local directory for client files
+
+# Ensure the client storage directory exists
+if not os.path.exists(CLIENT_STORAGE):
+    os.makedirs(CLIENT_STORAGE)
 
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,6 +87,60 @@ def main():
                 print(msg)
             else:
                 print(f"[ERROR] {msg}")
+                
+        elif cmd == "DOWNLOAD":
+            if len(command) < 2:
+                print("[ERROR] Specify the file name to download.")
+                continue
+
+            filename = command[1]
+
+            # Send the DOWNLOAD command to the server
+            client.send(f"{cmd}@{filename}".encode(FORMAT))
+
+            # Wait for the server response
+            response = client.recv(SIZE).decode(FORMAT)
+            if response.startswith("ERROR"):
+                print(response.split("@", 1)[1])
+                continue
+
+            if response.startswith("OK"):
+                print(f"Downloading file: {filename}")
+
+                # Open a file to write the incoming data
+                filepath = os.path.join(CLIENT_STORAGE, filename)
+                with open(filepath, "wb") as f:
+                    while True:
+                        chunk = client.recv(SIZE)
+                        if chunk == b"END_FILE":
+                            print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
+                            break
+                        f.write(chunk)
+
+                # Control returns here after the download loop ends
+
+
+        elif cmd == "DELETE":
+            # Check for filename argument
+            if len(command) < 2:
+                print("[ERROR] Specify the file name to delete.")
+                continue
+
+            filename = command[1].strip()
+
+            # Send DELETE request to the server
+            client.send(f"{cmd}@{filename}".encode(FORMAT))
+
+            # Receive and interpret server's response
+            response = client.recv(SIZE).decode(FORMAT)
+            cmd, msg = response.split("@", 1)
+
+            if cmd == "OK":
+                print(f"[SUCCESS] {msg}")
+            elif cmd == "ERROR":
+                print(f"[ERROR] {msg}")
+            else:
+                print("[ERROR] Unexpected response from the server.")
 
     client.close()  # Close the connection
 

@@ -79,12 +79,52 @@ def handle_client(conn, addr):
                 except Exception as e:
                     print(f"[ERROR] Failed to list directory contents: {e}")
                     conn.send(f"ERROR@Failed to list directory contents.".encode(FORMAT))
+                    
+            elif cmd == "DOWNLOAD":
+                filename = command[1]
+                filepath = os.path.join(SERVER_PATH, filename)
+
+                # Check if the file exists
+                if not os.path.isfile(filepath):
+                    conn.send(f"ERROR@File {filename} not found.".encode(FORMAT))
+                else:
+                    conn.send(f"OK@Ready to send {filename}".encode(FORMAT))
+
+                    # Open the file and send its content in chunks
+                    with open(filepath, "rb") as f:
+                        while (chunk := f.read(SIZE)):
+                            conn.send(chunk)
+
+                    # Send end-of-file marker
+                    conn.send(b"END_FILE")
+                    print(f"[DOWNLOAD COMPLETE] File {filename} sent to {addr}.")
             
+            elif cmd == "DELETE":
+                # Parse the filename from the client command
+                filename = command[1]
+                filepath = os.path.join(SERVER_PATH, filename)
+
+                # Check if the file exists
+                if not os.path.isfile(filepath):
+                    send_data = f"ERROR@File '{filename}' not found."
+                else:
+                    try:
+                        # Attempt to delete the file
+                        os.remove(filepath)
+                        send_data = f"OK@File '{filename}' deleted successfully."
+                    except Exception as e:
+                        send_data = f"ERROR@Failed to delete file '{filename}': {e}"
+
+                # Send the response to the client
+                conn.send(send_data.encode(FORMAT))
+
 
             else:
                 # Unknown command
                 conn.send("ERROR@Invalid command.".encode(FORMAT))
                 print(f"[ERROR] Unknown command received: {cmd}")
+
+            
 
         except Exception as e:
             print(f"[ERROR] Exception with client {addr}: {e}")
@@ -106,7 +146,7 @@ def main():
         conn, addr = server.accept()
         thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
-        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+        print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
 if __name__ == "__main__":
