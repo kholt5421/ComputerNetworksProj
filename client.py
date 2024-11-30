@@ -1,9 +1,9 @@
 import os
 import socket
-
+from cryptography.fernet import Fernet
 
 # Server connection details
-IP = "192.168.4.146"  # Change to server IPv4
+IP = "192.168.1.133"  # Change to server IPv4
 PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
@@ -14,16 +14,51 @@ CLIENT_STORAGE = "client_storage"  # Local directory for client files
 if not os.path.exists(CLIENT_STORAGE):
     os.makedirs(CLIENT_STORAGE)
 
+def load_key():
+    # Load the key from the file
+    with open("key.key", "rb") as key_file:
+        return key_file.read()
+
+def authenticate(client, username, password):
+    key = load_key()
+    fernet = Fernet(key)
+
+    # Encrypt the password
+    encrypted_password = fernet.encrypt(password.encode())
+
+    # Send the username and encrypted password to the server
+    client.send(f"AUTH@{username}@{encrypted_password.decode()}".encode(FORMAT))
+    response = client.recv(SIZE).decode(FORMAT)
+    cmd, msg = response.split("@", 1)
+    if cmd == "OK":
+        print(f"[SUCCESS] {msg}")
+        return True
+    else:
+        print(f"[ERROR] {msg}")
+        return False
+
+
+
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
     print("[CONNECTED] Connected to the server.")
+    
     response = client.recv(SIZE).decode(FORMAT)
     print(response)
+    # Authentication loop
+    while True:
+        username = input("Enter username: ").strip()
+        password = input("Enter password: ").strip()
 
+        if authenticate(client, username, password):
+            break
+        else:
+            print("[ERROR] Authentication failed. Try again.")
+
+    # Command loop
     while True:        
-
-        # Input command from the client
+        # Input 
         data = input("> ").strip()
         command = data.split(" ")
         cmd = command[0].upper()
@@ -32,6 +67,7 @@ def main():
             client.send(cmd.encode(FORMAT))
             print("[DISCONNECTED] Logged out from the server.")
             break
+        
         elif cmd == "UPLOAD":
             if len(command) < 2:
                 print("[ERROR] Specify the file path to upload.")

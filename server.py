@@ -3,8 +3,9 @@ import socket
 import threading
 import hashlib
 import time  # To measure response time
+from cryptography.fernet import Fernet
 
-IP = "192.168.4.146" # Change to server IPv4
+IP = "192.168.1.133" # Change to server IPv4
 PORT = 49157
 ADDR = (IP,PORT)
 SIZE = 1024
@@ -14,10 +15,43 @@ SERVER_PATH = "server_storage"  # Directory to store files
 # Ensure the server storage directory exists
 if not os.path.exists(SERVER_PATH):
     os.makedirs(SERVER_PATH)
-    
+
+def hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+# Example: Generate hashed passwords for users
+USERS = {
+    "user1": hash_password("password1"),
+    "user2": hash_password("password2")
+}
+
+def load_key():
+    # Load the key from the file
+    with open("key.key", "rb") as key_file:
+        return key_file.read()
+
+# Load the key
+key = load_key()
+fernet = Fernet(key)
+
+# Authenticate user using encrypted password
+def authenticate(username, encrypted_password):
+    try:
+        # Decrypt the password
+        decrypted_password = fernet.decrypt(encrypted_password.encode()).decode()
+
+        # Hash the decrypted password and check against stored hash
+        hashed_input = hashlib.sha256(decrypted_password.encode(FORMAT)).hexdigest()
+        return USERS.get(username) == hashed_input
+    except Exception as e:
+        print(f"[ERROR] Decryption failed: {e}")
+        return False
+
+
 def handle_client(conn, addr):
-   
-    print(f"[NEW CONNECTION] {addr} connected.")
+    authenticated = False
+    username = None  # Store the authenticated username
+    print(f"\n[NEW CONNECTION] {addr} connected.")
     conn.send("Welcome to the server".encode(FORMAT))
 
     while True:
@@ -28,10 +62,22 @@ def handle_client(conn, addr):
                 print(f"[DISCONNECTED] {addr} disconnected.")
                 break
 
-            print(f"[RECEIVED DATA] {data} from {addr}")
+            #print(f"[RECEIVED DATA] {data} from {addr}")
             command = data.split("@")
             cmd = command[0]
-
+            if not authenticated:
+                if cmd == "AUTH":
+                    username = command[1]
+                    encrypted_password = command[2]
+                    if authenticate(username, encrypted_password):
+                        authenticated = True
+                        conn.send("OK@Authentication successful.".encode(FORMAT))
+                    else:
+                        conn.send("ERROR@Invalid credentials.".encode(FORMAT))
+                else:
+                    conn.send("ERROR@Please authenticate first.".encode(FORMAT))
+                continue
+            
             if cmd == "LOGOUT":
                 # Log the user out
                 conn.send("OK@Logged out".encode(FORMAT))
