@@ -156,8 +156,10 @@ def handle_client(conn, addr):
                 else:
                     try:
                         # Attempt to delete the file
+                        startDT = time.perf_counter()
                         os.remove(filepath)
-                        send_data = f"OK@File '{filename}' deleted successfully."
+                        endDT = time.perf_counter()
+                        send_data = f"OK@File '{filename}' deleted successfully. Deletion took {endDT - startDT:.2f} s"
                     except Exception as e:
                         send_data = f"ERROR@Failed to delete file '{filename}': {e}"
 
