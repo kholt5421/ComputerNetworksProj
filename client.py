@@ -1,5 +1,6 @@
 import os
 import socket
+import time
 from cryptography.fernet import Fernet
 
 # Server connection details
@@ -146,12 +147,15 @@ def main():
                 # Open a file to write the incoming data
                 filepath = os.path.join(CLIENT_STORAGE, filename)
                 with open(filepath, "wb") as f:
+                    start = time.perf_counter()
                     while True:
                         chunk = client.recv(SIZE)
                         if chunk == b"END_FILE":
                             print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
+                            end = time.perf_counter()
                             break
                         f.write(chunk)
+                    print(f"The time to download was {end - start:.2f} s")
 
                 # Control returns here after the download loop ends
 
