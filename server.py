@@ -5,7 +5,7 @@ import hashlib
 import time  # To measure response time
 from cryptography.fernet import Fernet
 
-IP = "192.168.1.133" # Change to server IPv4
+IP = "192.168.56.1" # Change to server IPv4
 PORT = 49157
 ADDR = (IP,PORT)
 SIZE = 1024
@@ -144,56 +144,71 @@ def handle_client(conn, addr):
                     # Send end-of-file marker
                     conn.send(b"END_FILE")
                     print(f"[DOWNLOAD COMPLETE] File {filename} sent to {addr}.")
-            
+
+            elif cmd == "CREATE":
+                subfolder_path = os.path.join(SERVER_PATH, command[1])
+                try:
+                    os.makedirs(subfolder_path, exist_ok=True)
+                    conn.send(f"OK@Subfolder '{command[1]}' created successfully.".encode(FORMAT))
+                except Exception as e:
+                    conn.send(f"ERROR@Failed to create subfolder: {e}".encode(FORMAT))
+                    print(f"Received command: {cmd} with argument {command[1]}")
+
+
             elif cmd == "DELETE":
-                # Parse the filename from the client command
-                filename = command[1]
-                filepath = os.path.join(SERVER_PATH, filename)
+                target_path = os.path.join(SERVER_PATH, command[1])  # Target file or subfolder
 
-                # Check if the file exists
-                if not os.path.isfile(filepath):
-                    send_data = f"ERROR@File '{filename}' not found."
-                else:
+                if os.path.isfile(target_path):
+                    # Handle file deletion
                     try:
-                        # Attempt to delete the file
-                        os.remove(filepath)
-                        send_data = f"OK@File '{filename}' deleted successfully."
+                        os.remove(target_path)
+                        conn.send(f"OK@File '{command[1]}' deleted successfully.".encode(FORMAT))
                     except Exception as e:
-                        send_data = f"ERROR@Failed to delete file '{filename}': {e}"
-
-                # Send the response to the client
-                conn.send(send_data.encode(FORMAT))
-
+                        conn.send(f"ERROR@Failed to delete file: {e}".encode(FORMAT))
+                elif os.path.isdir(target_path):
+                    # Handle subfolder deletion
+                    try:
+                        os.rmdir(target_path)  # Removes only empty directories
+                        conn.send(f"OK@Subfolder '{command[1]}' deleted successfully.".encode(FORMAT))
+                    except OSError as e:
+                        conn.send(f"ERROR@Subfolder '{command[1]}' is not empty or cannot be deleted: {e}".encode(FORMAT))
+                    except Exception as e:
+                        conn.send(f"ERROR@Failed to delete subfolder: {e}".encode(FORMAT))
+                else:
+                    # Target not found
+                    conn.send(f"ERROR@Target '{command[1]}' not found.".encode(FORMAT))
 
             else:
                 # Unknown command
                 conn.send("ERROR@Invalid command.".encode(FORMAT))
                 print(f"[ERROR] Unknown command received: {cmd}")
 
-            
-
         except Exception as e:
-            print(f"[ERROR] Exception with client {addr}: {e}")
-            break
+                # Handle general exceptions for the entire loop
+                print(f"[ERROR] Exception with client {addr}: {e}")
+                conn.send(f"ERROR@Unexpected error: {e}".encode(FORMAT))
+                break  # Exit the loop on critical error
 
-    conn.close()
-    print(f"[CONNECTION CLOSED] {addr}")
-
+        finally:
+                # Ensure connection is closed properly
+                conn.close()
+                print(f"[CONNECTION CLOSED] {addr}")
+               
 
 def main():
     # Main server function to accept and manage connections.
-    print("[STARTING] Server is starting...")
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(ADDR)
-    server.listen()
-    print(f"[LISTENING] Server is listening on {IP}:{PORT}")
+                print("[STARTING] Server is starting...")
+                server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                server.bind(ADDR)
+                server.listen()
+                print(f"[LISTENING] Server is listening on {IP}:{PORT}")
 
-    while True:
-        conn, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
-        thread.start()
-        print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+                while True:
+                    conn, addr = server.accept()
+                    thread = threading.Thread(target=handle_client, args=(conn, addr))
+                    thread.start()
+                    print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
 if __name__ == "__main__":
-    main()
+                main()

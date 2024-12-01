@@ -3,7 +3,7 @@ import socket
 from cryptography.fernet import Fernet
 
 # Server connection details
-IP = "192.168.1.133"  # Change to server IPv4
+IP = "192.168.56.1"  # Change to server IPv4
 PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
@@ -154,6 +154,22 @@ def main():
                         f.write(chunk)
 
                 # Control returns here after the download loop ends
+        elif cmd == "CREATE":
+            # Check if the subfolder name is provided
+            if len(command) < 2:
+                print("[ERROR] Specify the subfolder name to create.")
+                continue
+
+            subfolder_name = command[1].strip()
+            print(f"[DEBUG] Sending CREATE command: {cmd}@{subfolder_name}")  # Debug log
+            
+            # Send CREATE request to the server
+            client.send(f"{cmd}@{subfolder_name}".encode(FORMAT))
+
+             # Receive and interpret the server's response
+            response = client.recv(SIZE).decode(FORMAT)
+            cmd, msg = response.split("@", 1)
+            print(f"Sent CREATE command: {cmd}@{subfolder_name}")
 
 
         elif cmd == "DELETE":
@@ -179,7 +195,6 @@ def main():
                 print("[ERROR] Unexpected response from the server.")
 
     client.close()  # Close the connection
-
 
 
 if __name__ == "__main__":
