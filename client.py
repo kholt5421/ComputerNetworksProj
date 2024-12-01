@@ -4,7 +4,7 @@ import time
 from cryptography.fernet import Fernet
 
 # Server connection details
-IP = "192.168.56.1"  # Change to server IPv4
+IP = "192.168.1.133"  # Change to server IPv4
 PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
@@ -89,30 +89,42 @@ def main():
 
             # Wait for server response
             response = client.recv(SIZE).decode(FORMAT)
-            if response.startswith("ERROR@File already exists"):
+            if response.startswith("ERROR@File"):
+                # Server asks if we want to overwrite
                 print(response.split("@", 1)[1])
-                overwrite = input("Overwrite the file? (yes/no): ").strip().lower()
-                client.send(overwrite.encode(FORMAT))
-                if overwrite != "yes":
-                    print("[UPLOAD CANCELLED] The file was not uploaded.")
-                    continue
+                overwrite = input("Do you want to overwrite? (yes/no): ").strip().lower()
 
-            # Send the file content in chunks
+                # Send overwrite decision to server
+                client.send(overwrite.encode(FORMAT))
+                response = client.recv(SIZE).decode(FORMAT)
+
+                # Handle response to overwrite decision
+                if response.startswith("ERROR@"):
+                    print(response.split("@", 1)[1])
+                    continue  # Ensure client returns to main loop for new commands
+
+            elif response.startswith("ERROR@"):
+                print(response.split("@", 1)[1])
+                continue
+
             startU = time.perf_counter()
+            # Proceed to upload the file
             with open(filepath, "rb") as f:
                 chunk = f.read(SIZE)
                 while chunk:
                     client.send(chunk)
                     chunk = f.read(SIZE)
 
-            # Send a special message to indicate the end of file transfer
-            client.send(b'END_FILE')
             endU = time.perf_counter()
 
             # Wait for server confirmation
             response = client.recv(SIZE).decode(FORMAT)
             cmd, msg = response.split("@", 1)
-            print(msg)
+            if cmd == "OK":
+                print(f"[SUCCESS] {msg}")
+            elif cmd == "ERROR":
+                print(f"[ERROR] {msg}")
+
             print(f"The time to upload was {endU - startU:.2f} s")
 
         elif cmd == "DIR":
@@ -145,22 +157,26 @@ def main():
                 continue
 
             if response.startswith("OK"):
-                print(f"Downloading file: {filename}")
+                _, server_filename, filesize = response.split("@")
+                filesize = int(filesize)  # Convert to an integer
+                print(f"Downloading file: {server_filename} ({filesize} bytes)")
 
                 # Open a file to write the incoming data
                 filepath = os.path.join(CLIENT_STORAGE, filename)
-                with open(filepath, "wb") as f:
-                    startD = time.perf_counter()
-                    while True:
-                        chunk = client.recv(SIZE)
-                        if chunk == b"END_FILE":
-                            print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
-                            endD = time.perf_counter()
-                            break
-                        f.write(chunk)
-                    print(f"The time to download was {endD - startD:.2f} s")
 
-                # Control returns here after the download loop ends
+                startD = time.perf_counter()
+                with open(filepath, "wb") as f:
+                    bytes_received = 0
+                    while bytes_received < filesize:
+                        chunk = client.recv(min(SIZE, filesize - bytes_received))
+                        f.write(chunk)
+                        bytes_received += len(chunk)
+                endD = time.perf_counter()
+                
+                print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
+                print(f"The time to download was {endD - startD:.2f} s")
+                
+
         elif cmd == "CREATE":
             # Check if the subfolder name is provided
             if len(command) < 2:
@@ -202,6 +218,7 @@ def main():
                 print("[ERROR] Unexpected response from the server.")
 
     client.close()  # Close the connection
+
 
 
 if __name__ == "__main__":

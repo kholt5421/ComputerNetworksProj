@@ -1,11 +1,12 @@
 import os
 import socket
 import threading
-import hashlib
 import time  # To measure response time
+import hashlib
+
 from cryptography.fernet import Fernet
 
-IP = "192.168.56.1" # Change to server IPv4
+IP = "192.168.1.133" # Change to server IPv4
 PORT = 49157
 ADDR = (IP,PORT)
 SIZE = 1024
@@ -85,32 +86,34 @@ def handle_client(conn, addr):
                 break
 
             elif cmd == "UPLOAD":
-                # Handle file upload
                 filename = command[1]
                 filesize = int(command[2])
                 filepath = os.path.join(SERVER_PATH, filename)
 
-                # Check for existing file
+                # Check if the file exists
                 if os.path.exists(filepath):
+                    # Notify the client about the existing file
                     conn.send(f"ERROR@File {filename} already exists.".encode(FORMAT))
+                    
+                    # Wait for client response
                     overwrite = conn.recv(SIZE).decode(FORMAT).strip().lower()
                     if overwrite != "yes":
-                        conn.send("ERROR@Upload cancelled.".encode(FORMAT))
-                        continue
+                        conn.send("ERROR@Upload cancelled by user.".encode(FORMAT))
+                        print(f"[UPLOAD CANCELLED] Client declined to overwrite {filename}.")
+                        continue  # Ensure proper exit to process further commands
 
+                # Notify the client that the server is ready to receive the file
                 conn.send("OK@Ready to receive file".encode(FORMAT))
 
-                # Receive the file data in chunks
+                # Open the file to write incoming data
                 with open(filepath, "wb") as f:
                     bytes_received = 0
                     while bytes_received < filesize:
                         chunk = conn.recv(SIZE)
-                        if chunk == b"END_FILE":
-                            break
                         f.write(chunk)
                         bytes_received += len(chunk)
 
-                print(f"[UPLOAD COMPLETE] File {filename} uploaded by {addr}.")
+                print(f"[UPLOAD COMPLETE] File {filename} uploaded successfully.")
                 conn.send(f"OK@File {filename} uploaded successfully.".encode(FORMAT))
 
             elif cmd == "DIR":
@@ -134,7 +137,8 @@ def handle_client(conn, addr):
                 if not os.path.isfile(filepath):
                     conn.send(f"ERROR@File {filename} not found.".encode(FORMAT))
                 else:
-                    conn.send(f"OK@Ready to send {filename}".encode(FORMAT))
+                    filesize = os.path.getsize(filepath)
+                    conn.send(f"OK@{filename}@{filesize}".encode(FORMAT))  # Send metadata
 
                     # Open the file and send its content in chunks
                     with open(filepath, "rb") as f:
@@ -144,7 +148,7 @@ def handle_client(conn, addr):
                     # Send end-of-file marker
                     conn.send(b"END_FILE")
                     print(f"[DOWNLOAD COMPLETE] File {filename} sent to {addr}.")
-
+            
             elif cmd == "CREATE":
                 subfolder_path = os.path.join(SERVER_PATH, command[1])
                 try:
@@ -156,23 +160,34 @@ def handle_client(conn, addr):
 
 
             elif cmd == "DELETE":
-                # Parse the filename from the client command
-                filename = command[1]
-                filepath = os.path.join(SERVER_PATH, filename)
+                name = command[1]
+                path = os.path.join(SERVER_PATH, name)
 
                 # Check if the file exists
-                if not os.path.isfile(filepath):
-                    send_data = f"ERROR@File '{filename}' not found."
-                else:
+                if not os.path.isfile(path) and not os.path.isdir(path):
+                    send_data = f"ERROR@File '{name}' not found."
+                elif os.path.isfile(path):
                     try:
                         # Attempt to delete the file
-                        os.remove(filepath)
-                        send_data = f"OK@File '{filename}' deleted successfully."
+                        startDT = time.perf_counter()
+                        os.remove(path)
+                        endDT = time.perf_counter()
+                        send_data = f"OK@File '{name}' deleted successfully. Deletion took {endDT - startDT:.2f} s"
                     except Exception as e:
                         conn.send(f"ERROR@Failed to delete subfolder: {e}".encode(FORMAT))
-                    # Target not found
-                    conn.send(f"ERROR@Target '{command[1]}' not found.".encode(FORMAT))
 
+                elif os.path.isdir(path):
+                    try:
+                        # Attempt to delete the subfolder
+                        startDT = time.perf_counter()
+                        os.rmdir(path)
+                        endDT = time.perf_counter()
+                        send_data = f"OK@File '{name}' deleted successfully. Deletion took {endDT - startDT:.2f} s"
+                    except Exception as e:
+                        send_data = f"ERROR@Failed to delete subdirectory '{name}': {e}"
+                # Send the response to the client
+                conn.send(send_data.encode(FORMAT))
+                
             else:
                 # Unknown command
                 conn.send("ERROR@Invalid command.".encode(FORMAT))
@@ -184,26 +199,25 @@ def handle_client(conn, addr):
                 conn.send(f"ERROR@Unexpected error: {e}".encode(FORMAT))
                 break  # Exit the loop on critical error
 
-        finally:
-                # Ensure connection is closed properly
-                conn.close()
-                print(f"[CONNECTION CLOSED] {addr}")
+    conn.close()
+    print(f"[CONNECTION CLOSED] {addr}")
                
 
 def main():
     # Main server function to accept and manage connections.
-                print("[STARTING] Server is starting...")
-                server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                server.bind(ADDR)
-                server.listen()
-                print(f"[LISTENING] Server is listening on {IP}:{PORT}")
+    print("[STARTING] Server is starting...")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(ADDR)
+    server.listen()
+    print(f"[LISTENING] Server is listening on {IP}:{PORT}")
 
-                while True:
-                    conn, addr = server.accept()
-                    thread = threading.Thread(target=handle_client, args=(conn, addr))
-                    thread.start()
-                    print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+    while True:
+        conn, addr = server.accept()
+        thread = threading.Thread(target=handle_client, args=(conn, addr))
+        thread.start()
+        print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
 
 
 if __name__ == "__main__":
-                main()
+    main()
+
