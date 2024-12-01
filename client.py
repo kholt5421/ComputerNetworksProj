@@ -1,5 +1,6 @@
 import os
 import socket
+import time
 from cryptography.fernet import Fernet
 
 # Server connection details
@@ -97,6 +98,7 @@ def main():
                     continue
 
             # Send the file content in chunks
+            startU = time.perf_counter()
             with open(filepath, "rb") as f:
                 chunk = f.read(SIZE)
                 while chunk:
@@ -105,11 +107,13 @@ def main():
 
             # Send a special message to indicate the end of file transfer
             client.send(b'END_FILE')
+            endU = time.perf_counter()
 
             # Wait for server confirmation
             response = client.recv(SIZE).decode(FORMAT)
             cmd, msg = response.split("@", 1)
             print(msg)
+            print(f"The time to upload was {endU - startU:.2f} s")
 
         elif cmd == "DIR":
             # Send the command to the server
@@ -146,12 +150,15 @@ def main():
                 # Open a file to write the incoming data
                 filepath = os.path.join(CLIENT_STORAGE, filename)
                 with open(filepath, "wb") as f:
+                    startD = time.perf_counter()
                     while True:
                         chunk = client.recv(SIZE)
                         if chunk == b"END_FILE":
                             print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
+                            endD = time.perf_counter()
                             break
                         f.write(chunk)
+                    print(f"The time to download was {endD - startD:.2f} s")
 
                 # Control returns here after the download loop ends
         elif cmd == "CREATE":

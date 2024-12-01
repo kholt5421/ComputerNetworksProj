@@ -156,25 +156,20 @@ def handle_client(conn, addr):
 
 
             elif cmd == "DELETE":
-                target_path = os.path.join(SERVER_PATH, command[1])  # Target file or subfolder
+                # Parse the filename from the client command
+                filename = command[1]
+                filepath = os.path.join(SERVER_PATH, filename)
 
-                if os.path.isfile(target_path):
-                    # Handle file deletion
+                # Check if the file exists
+                if not os.path.isfile(filepath):
+                    send_data = f"ERROR@File '{filename}' not found."
+                else:
                     try:
-                        os.remove(target_path)
-                        conn.send(f"OK@File '{command[1]}' deleted successfully.".encode(FORMAT))
-                    except Exception as e:
-                        conn.send(f"ERROR@Failed to delete file: {e}".encode(FORMAT))
-                elif os.path.isdir(target_path):
-                    # Handle subfolder deletion
-                    try:
-                        os.rmdir(target_path)  # Removes only empty directories
-                        conn.send(f"OK@Subfolder '{command[1]}' deleted successfully.".encode(FORMAT))
-                    except OSError as e:
-                        conn.send(f"ERROR@Subfolder '{command[1]}' is not empty or cannot be deleted: {e}".encode(FORMAT))
+                        # Attempt to delete the file
+                        os.remove(filepath)
+                        send_data = f"OK@File '{filename}' deleted successfully."
                     except Exception as e:
                         conn.send(f"ERROR@Failed to delete subfolder: {e}".encode(FORMAT))
-                else:
                     # Target not found
                     conn.send(f"ERROR@Target '{command[1]}' not found.".encode(FORMAT))
 
