@@ -1,0 +1,4 @@
+operation,command,response_time_ms,filename,filesize_bytes,rate_mb_s,time_s
+response,DIR,0.2080000000006521,,,,
+upload,,,test.txt,16384.0,19.32830282037697,0.0008084000000003755
+download,,,test.txt,16384.0,1.2689530832519271,0.012313299999995309
