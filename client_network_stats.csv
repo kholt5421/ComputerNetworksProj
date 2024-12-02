@@ -1,0 +1,5 @@
+operation,command,response_time_ms,filename,filesize_bytes
+response,DIR,0.33789999999989107,,
+response,UPLOAD,0.6520000000023174,test.txt,16384.0
+response,DOWNLOAD,11.994399999998961,test.txt,16384.0
+response,LOGOUT,0.09680000000145128,,
