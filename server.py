@@ -83,7 +83,9 @@ def handle_client(conn, addr):
             
             if cmd == "LOGOUT":
                 # Log the user out
+                start_time = time.perf_counter()
                 conn.send("OK@Logged out".encode(FORMAT))
+                stats_logger.record_response_time(cmd, start_time, end_time)    
                 print(f"[DISCONNECTED] {addr} logged out.")
                 break
 
