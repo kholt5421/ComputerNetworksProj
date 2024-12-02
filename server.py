@@ -3,6 +3,7 @@ import socket
 import threading
 import time  # To measure response time
 import hashlib
+import signal
 
 from cryptography.fernet import Fernet
 from network_stats import NetworkStats
@@ -14,6 +15,15 @@ SIZE = 1024
 FORMAT = "utf-8"
 SERVER_PATH = "server_storage"  # Directory to store files
 stats_logger = NetworkStats()
+is_running = True
+
+# Set up a signal handler to capture keyboard interrupt in order to close the server
+def signal_handler(sig, frame):
+    global is_running
+    print("\n[INFO] Interrupt received. Shutting down server...")
+    is_running = False
+
+signal.signal(signal.SIGINT, signal_handler)
 
 # Ensure the server storage directory exists
 if not os.path.exists(SERVER_PATH):
@@ -232,6 +242,7 @@ def handle_client(conn, addr):
                
 
 def main():
+    global is_running
     # Main server function to accept and manage connections.
     print("[STARTING] Server is starting...")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -240,19 +251,23 @@ def main():
     print(f"[LISTENING] Server is listening on {IP}:{PORT}")
 
     try:
-        while True:
-            conn, addr = server.accept()
-            thread = threading.Thread(target=handle_client, args=(conn, addr))
-            thread.start()
-            print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+        while is_running:
+            server.settimeout(0.1)  # Allow periodic checks
+            try:
+                conn, addr = server.accept()
+                thread = threading.Thread(target=handle_client, args=(conn, addr))
+                thread.start()
+                print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+            except socket.timeout:
+                continue
 
-    except KeyboardInterrupt:
-        # Save stats when shutting down the server
-        stats_logger.save_stats_to_csv("server_network_stats.csv")
-        print("[INFO] Server network statistics saved.")
-        
+    except Exception as e:
+        print(f"[ERROR] {e}")
     finally:
         server.close()
+        stats_logger.save_stats_to_csv("server_network_stats.csv")
+        print("[INFO] Server network statistics saved.")
+        print("[SHUTDOWN] Server has shut down.")
         
 if __name__ == "__main__":
     main()

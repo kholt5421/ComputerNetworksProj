@@ -187,7 +187,7 @@ def main():
                         bytes_received += len(chunk)
                 
                 endD = time.perf_counter()  # End timing download
-                stats_logger.record_response_time(cmd, startD, endD, filename=server_filename, filesize=filesize)  # Log download stats
+                stats_logger.record_download(filename, filesize, start_time, end_time)  # Log download stats
                 
                 print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
                 end_file = client.recv(SIZE)
