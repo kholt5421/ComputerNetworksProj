@@ -123,7 +123,7 @@ def main():
                     client.send(chunk)
                     chunk = f.read(SIZE)
 
-            endU = time.perf_counter()
+            end_time = time.perf_counter()
             stats_logger.record_upload(filename, filesize, start_time, end_time)  # Log upload stats
 
             # Wait for server confirmation
@@ -178,7 +178,7 @@ def main():
                 # Open a file to write the incoming data
                 filepath = os.path.join(CLIENT_STORAGE, filename)
 
-                startD = time.perf_counter()  # Start timing download
+                start_time = time.perf_counter()  # Start timing download
                 with open(filepath, "wb") as f:
                     bytes_received = 0
                     while bytes_received < filesize:
@@ -186,7 +186,7 @@ def main():
                         f.write(chunk)
                         bytes_received += len(chunk)
                 
-                endD = time.perf_counter()  # End timing download
+                end_time = time.perf_counter()  # End timing download
                 stats_logger.record_download(filename, filesize, start_time, end_time)  # Log download stats
                 
                 print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
