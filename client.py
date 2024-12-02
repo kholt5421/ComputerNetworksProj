@@ -5,7 +5,7 @@ from cryptography.fernet import Fernet
 from network_stats import NetworkStats
 
 # Server connection details
-IP = "10.200.232.146"  # Change to server IPv4
+IP = "10.221.80.45"  # Change to server IPv4
 PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
@@ -114,7 +114,7 @@ def main():
                 print(response.split("@", 1)[1])
                 continue
 
-            startU = time.perf_counter()  # Start timing upload
+            start_time = time.perf_counter()  # Start timing upload
             
             # Proceed to upload the file
             with open(filepath, "rb") as f:
