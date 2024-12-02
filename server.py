@@ -7,8 +7,7 @@ import hashlib
 from cryptography.fernet import Fernet
 from server_network_analysis import NetworkStats
 
-
-IP = "192.168.1.12" # Change to server IPv4
+IP = "10.200.232.146" # Change to server IPv4
 PORT = 49157
 ADDR = (IP,PORT)
 SIZE = 1024
@@ -107,7 +106,9 @@ def handle_client(conn, addr):
 
                 # Notify the client that the server is ready to receive the file
                 conn.send("OK@Ready to receive file".encode(FORMAT))
+
                 start_time = time.perf_counter()
+                
                 # Open the file to write incoming data
                 with open(filepath, "wb") as f:
                     bytes_received = 0
@@ -118,11 +119,13 @@ def handle_client(conn, addr):
 
                 end_time = time.perf_counter()
                 stats_logger.record_upload(filename, filesize, start_time, end_time)
+                
                 print(f"[UPLOAD COMPLETE] File {filename} uploaded successfully.")
                 conn.send(f"OK@File {filename} uploaded successfully.".encode(FORMAT))
 
             elif cmd == "DIR":
                 start_time = time.perf_counter()
+                
                 # Handle directory listing
                 try:
                     files = os.listdir(SERVER_PATH)
@@ -131,13 +134,14 @@ def handle_client(conn, addr):
                     else:
                         file_list = "No files in the server directory."
                     conn.send(f"OK@{file_list}".encode(FORMAT))
+
+                    
                 except Exception as e:
                     print(f"[ERROR] Failed to list directory contents: {e}")
                     conn.send(f"ERROR@Failed to list directory contents.".encode(FORMAT))
                 finally:
                     end_time = time.perf_counter()  # End timing
-                    stats_logger.record_response_time("DIR", start_time, end_time)
-
+                    stats_logger.record_response_time(cmd, start_time, end_time)    
 
             elif cmd == "DOWNLOAD":
                 filename = command[1]
@@ -158,9 +162,11 @@ def handle_client(conn, addr):
 
                     # Send end-of-file marker
                     conn.send(b"END_FILE")
-                    print(f"[DOWNLOAD COMPLETE] File {filename} sent to {addr}.")
+
                     end_time = time.perf_counter()
                     stats_logger.record_download(filename, filesize, start_time, end_time)
+                    
+                    print(f"[DOWNLOAD COMPLETE] File {filename} sent to {addr}.")
             
             elif cmd == "CREATE":
                 start_time = time.perf_counter()
@@ -171,12 +177,14 @@ def handle_client(conn, addr):
                 except Exception as e:
                     conn.send(f"ERROR@Failed to create subfolder: {e}".encode(FORMAT))
                     print(f"Received command: {cmd} with argument {command[1]}")
-                    end_time = time.perf_counter()
+
+                finally:
+                    end_time = time.perf_counter()  # End timing
                     stats_logger.record_response_time(cmd, start_time, end_time)
 
-
             elif cmd == "DELETE":
-                start_time = time.perf_counter()  # Start tracking the command execution time
+                start_time = time.perf_counter()
+                
                 name = command[1]
                 path = os.path.join(SERVER_PATH, name)
 
@@ -186,21 +194,23 @@ def handle_client(conn, addr):
                 elif os.path.isfile(path):
                     try:
                         # Attempt to delete the file
-                        
-                        os.remove(path)
+                        os.remove(path)                       
                         send_data = f"OK@File '{name}' deleted successfully."
+
                     except Exception as e:
                         conn.send(f"ERROR@Failed to delete subfolder: {e}".encode(FORMAT))
 
                 elif os.path.isdir(path):
                     try:
                         # Attempt to delete the subfolder
-                        os.rmdir(path)
-                        send_data = f"OK@File '{name}' deleted successfully."
+                        os.rmdir(path)                        
+                        send_data = f"OK@Subdirectory '{name}' deleted successfully."
+
                     except Exception as e:
                         send_data = f"ERROR@Failed to delete subdirectory '{name}': {e}"
                 # Send the response to the client
                 conn.send(send_data.encode(FORMAT))
+
                 end_time = time.perf_counter()  # End tracking the command execution time
                 stats_logger.record_response_time(cmd, start_time, end_time)  # Log the response time
 
@@ -232,14 +242,16 @@ def main():
             conn, addr = server.accept()
             thread = threading.Thread(target=handle_client, args=(conn, addr))
             thread.start()
-            print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() + 1}")
+            print(f"\n[ACTIVE CONNECTIONS] {threading.active_count() - 2}")
+
     except KeyboardInterrupt:
         # Save stats when shutting down the server
         stats_logger.save_stats_to_csv("server_network_stats.csv")
         print("[INFO] Server network statistics saved.")
+        
     finally:
         server.close()
-
+        
 if __name__ == "__main__":
     main()
 
