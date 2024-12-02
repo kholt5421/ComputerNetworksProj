@@ -2,7 +2,7 @@ import os
 import socket
 import time
 from cryptography.fernet import Fernet
-from client_network_analysis import NetworkStats
+from network_stats import NetworkStats
 
 # Server connection details
 IP = "10.200.232.146"  # Change to server IPv4
@@ -124,7 +124,7 @@ def main():
                     chunk = f.read(SIZE)
 
             endU = time.perf_counter()
-            stats_logger.record_response_time(cmd, startU, endU, filename=filename, filesize=filesize)  # Log upload stats
+            stats_logger.record_upload(filename, filesize, start_time, end_time)  # Log upload stats
 
             # Wait for server confirmation
             response = client.recv(SIZE).decode(FORMAT)
@@ -243,7 +243,7 @@ def main():
                 print("[ERROR] Unexpected response from the server.")
 
             
-            
+    stats_logger.save_stats_to_csv("client_network_stats.csv")       
     client.close()  # Close the connection
 
 

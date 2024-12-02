@@ -5,7 +5,7 @@ import time  # To measure response time
 import hashlib
 
 from cryptography.fernet import Fernet
-from server_network_analysis import NetworkStats
+from network_stats import NetworkStats
 
 IP = "10.200.232.146" # Change to server IPv4
 PORT = 49157
