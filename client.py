@@ -2,16 +2,14 @@ import os
 import socket
 import time
 from cryptography.fernet import Fernet
-from network_stats import NetworkStats
 
 # Server connection details
-IP = "10.221.80.45"  # Change to server IPv4
+IP = "10.200.232.146"  # Change to server IPv4
 PORT = 49157
 ADDR = (IP, PORT)
 SIZE = 1024  # Buffer size
 FORMAT = "utf-8"
 CLIENT_STORAGE = "client_storage"  # Local directory for client files
-stats_logger = NetworkStats()
 
 # Ensure the client storage directory exists
 if not os.path.exists(CLIENT_STORAGE):
@@ -67,12 +65,7 @@ def main():
         cmd = command[0].upper()
 
         if cmd == "LOGOUT":
-            start_time = time.perf_counter()  # Start timing for LOGOUT
             client.send(cmd.encode(FORMAT))
-            response = client.recv(SIZE).decode(FORMAT)
-            
-            end_time = time.perf_counter()  # End timing
-            stats_logger.record_response_time(cmd, start_time, end_time)  # Log response time
             print("[DISCONNECTED] Logged out from the server.")
             break
         
@@ -114,8 +107,7 @@ def main():
                 print(response.split("@", 1)[1])
                 continue
 
-            start_time = time.perf_counter()  # Start timing upload
-            
+            startU = time.perf_counter()
             # Proceed to upload the file
             with open(filepath, "rb") as f:
                 chunk = f.read(SIZE)
@@ -123,8 +115,7 @@ def main():
                     client.send(chunk)
                     chunk = f.read(SIZE)
 
-            end_time = time.perf_counter()
-            stats_logger.record_upload(filename, filesize, start_time, end_time)  # Log upload stats
+            endU = time.perf_counter()
 
             # Wait for server confirmation
             response = client.recv(SIZE).decode(FORMAT)
@@ -134,11 +125,9 @@ def main():
             elif cmd == "ERROR":
                 print(f"[ERROR] {msg}")
 
-            
+            print(f"The time to upload was {endU - startU:.2f} s")
 
         elif cmd == "DIR":
-            start_time = time.perf_counter()  # Start timing for DIR
-            
             # Send the command to the server
             client.send(cmd.encode(FORMAT))
 
@@ -150,9 +139,6 @@ def main():
                 print(msg)
             else:
                 print(f"[ERROR] {msg}")
-
-            end_time = time.perf_counter()  # End timing
-            stats_logger.record_response_time(cmd, start_time, end_time)  # Log response time
                 
         elif cmd == "DOWNLOAD":
             if len(command) < 2:
@@ -178,7 +164,7 @@ def main():
                 # Open a file to write the incoming data
                 filepath = os.path.join(CLIENT_STORAGE, filename)
 
-                start_time = time.perf_counter()  # Start timing download
+                startD = time.perf_counter()
                 with open(filepath, "wb") as f:
                     bytes_received = 0
                     while bytes_received < filesize:
@@ -186,10 +172,10 @@ def main():
                         f.write(chunk)
                         bytes_received += len(chunk)
                 
-                end_time = time.perf_counter()  # End timing download
-                stats_logger.record_download(filename, filesize, start_time, end_time)  # Log download stats
+                endD = time.perf_counter()
                 
                 print(f"[DOWNLOAD COMPLETE] File {filename} downloaded successfully.")
+                print(f"The time to download was {endD - startD:.2f} s")
                 end_file = client.recv(SIZE)
 
         elif cmd == "CREATE":
@@ -198,11 +184,8 @@ def main():
                 print("[ERROR] Specify the subfolder name to create.")
                 continue
 
-            
-            
             subfolder_name = command[1].strip()
-
-            start_time = time.perf_counter()  # Start timing create
+            print(f"[DEBUG] Sending CREATE command: {cmd}@{subfolder_name}")  # Debug log
             
             # Send CREATE request to the server
             client.send(f"{cmd}@{subfolder_name}".encode(FORMAT))
@@ -212,28 +195,21 @@ def main():
             cmd, msg = response.split("@", 1)
             print(f"Sent CREATE command: {cmd}@{subfolder_name}")
 
-            end_time = time.perf_counter()  # End timing delete
-            stats_logger.record_response_time(cmd, start_time, end_time)  # Log response time
-            
+
         elif cmd == "DELETE":
             # Check for filename argument
             if len(command) < 2:
                 print("[ERROR] Specify the file name to delete.")
                 continue
-            
+
             filename = command[1].strip()
 
-            start_time = time.perf_counter()  # Start timing delete
-            
             # Send DELETE request to the server
             client.send(f"{cmd}@{filename}".encode(FORMAT))
 
             # Receive and interpret server's response
             response = client.recv(SIZE).decode(FORMAT)
             cmd, msg = response.split("@", 1)
-
-            end_time = time.perf_counter()  # End timing delete
-            stats_logger.record_response_time(cmd, start_time, end_time)  # Log response time
 
             if cmd == "OK":
                 print(f"[SUCCESS] {msg}")
@@ -242,8 +218,6 @@ def main():
             else:
                 print("[ERROR] Unexpected response from the server.")
 
-            
-    stats_logger.save_stats_to_csv("client_network_stats.csv")       
     client.close()  # Close the connection
 
 
